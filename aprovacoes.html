@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+  <title>Aprovar avaliações | Rejane Bispo</title>
+  <link rel="icon" href="assets/favicon.svg?v=2" type="image/svg+xml">
+  <link rel="stylesheet" href="assets/style.css"><script src="assets/reviews-admin.js" defer></script>
+</head><body><main class="container admin-page">
+  <a class="brand" href="/"><img src="assets/logo-rejane.png" width="96" height="66" alt="Rejane Bispo"></a>
+  <p class="kicker">ÁREA PRIVADA</p><h1>Avaliações <span>dos alunos.</span></h1>
+  <p id="admin-status" role="status" aria-live="polite">Verificando acesso…</p>
+  <div id="admin-content" hidden>
+    <div class="admin-toolbar"><button id="create-invitation" class="button" type="button">Gerar convite para aluno</button><button id="refresh-reviews" class="button secondary" type="button">Atualizar lista</button></div>
+    <div id="invitation-result" hidden><label for="invitation-link">Link individual — válido por 7 dias</label><input id="invitation-link" readonly><button id="copy-invitation" class="button secondary" type="button">Copiar convite</button></div>
+    <label for="admin-filter">Mostrar</label><select id="admin-filter"><option value="pending">Pendentes</option><option value="approved">Publicadas</option><option value="rejected">Rejeitadas</option></select>
+    <div id="admin-reviews" class="admin-reviews"></div>
+  </div>
+  <a class="review-back" href="/#resultados">Ver avaliações no site</a>
+</main></body></html>

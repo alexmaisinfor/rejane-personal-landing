@@ -1,0 +1,65 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import sharp from 'sharp';
+import { openReviews } from '../reviews-store.mjs';
+import { normalizeReviewPhoto } from '../review-photo.mjs';
+
+test('validação de fotos, painel protegido e publicação do retrato', {timeout:25000}, async () => {
+  const directory = mkdtempSync(path.join(tmpdir(),'rejane-http-'));
+  const filename = path.join(directory,'test.sqlite');
+  const store = openReviews(filename);
+  const admin = store.createAdminAccess();
+  const invite = store.createInvitation();
+  const png = await sharp({create:{width:30,height:40,channels:3,background:'#5f40ff'}}).png().toBuffer();
+  const normalized = await normalizeReviewPhoto(png.toString('base64'));
+  assert.equal((await sharp(normalized).metadata()).format,'webp');
+  assert.equal(await normalizeReviewPhoto(null),null);
+  await assert.rejects(normalizeReviewPhoto(Buffer.from('<svg></svg>').toString('base64')),{status:422});
+  store.close();
+  const child = spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'0',REVIEWS_DB:filename},stdio:['ignore','pipe','pipe']});
+  try {
+    const base = await new Promise((resolve,reject) => {
+      let output='';
+      child.stdout.on('data', chunk => { output += chunk; const match=/http:\/\/localhost:\d+/.exec(output); if (match) resolve(match[0]); });
+      child.once('error',reject);
+      child.once('exit',code => reject(new Error('Server exited '+code)));
+    });
+    const get = (route, token) => fetch(base+route,{headers:token ? {Authorization:`Bearer ${token}`} : {}});
+    const post = (route,token,data={}) => fetch(base+route,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(data)});
+    assert.equal((await get('/api/admin/reviews')).status,401);
+    assert.equal((await get('/data/reviews.sqlite')).status,404);
+    assert.equal((await get('/aprovacoes.html')).status,200);
+    const data={name:'Teste HTTP',rating:4,message:'Relato de teste para verificar o fluxo com fotografia.',consent:true,photo:png.toString('base64')};
+    assert.equal((await post('/api/reviews',invite,{...data,photo:'invalid'})).status,422);
+    assert.equal((await post('/api/reviews',invite,data)).status,201);
+    assert.equal((await post('/api/reviews',invite,data)).status,410);
+    const listing=await (await get('/api/admin/reviews',admin)).json();
+    const id=listing.reviews[0].id;
+    assert.equal(listing.reviews[0].status,'pending');
+    assert.equal((await get(`/review-photos/${id}.webp`)).status,404);
+    assert.equal((await get(`/api/admin/reviews/${id}/photo`)).status,401);
+    assert.equal((await get(`/api/admin/reviews/${id}/photo`,admin)).headers.get('content-type'),'image/webp');
+    assert.equal((await post(`/api/admin/reviews/${id}/approve`,'a'.repeat(64))).status,401);
+    assert.equal((await post(`/api/admin/reviews/${id}/approve`,admin)).status,200);
+    assert.equal((await post(`/api/admin/reviews/${id}/pin`,'a'.repeat(64))).status,401);
+    assert.equal((await post(`/api/admin/reviews/${id}/pin`,admin)).status,200);
+    assert.equal((await (await get('/api/reviews')).json()).reviews[0].pinned,1);
+    assert.equal((await post(`/api/admin/reviews/${id}/unpin`,admin)).status,200);
+    assert.equal((await (await get('/api/reviews')).json()).reviews[0].pinned,0);
+    assert.equal((await get('/api/reviews?cursor=invalid')).status,400);
+    assert.equal((await (await get('/api/reviews')).json()).reviews[0].has_photo,1);
+    assert.equal((await get(`/review-photos/${id}.webp`)).status,200);
+    assert.equal((await post(`/api/admin/reviews/${id}/approve`,admin)).status,409);
+    assert.equal((await post(`/api/admin/reviews/${id}/unpublish`,admin)).status,200);
+    assert.equal((await get(`/review-photos/${id}.webp`)).status,404);
+    const newInvite=await (await post('/api/admin/invitations',admin)).json();
+    assert.match(newInvite.token,/^[a-f0-9]{64}$/);
+  } finally {
+    await new Promise(resolve => { if (child.exitCode !== null) return resolve(); child.once('exit',resolve); child.kill(); });
+    rmSync(directory,{recursive:true,force:true});
+  }
+});

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Fundo azul-marinho arredondado -->
+  <rect width="64" height="64" rx="14" fill="#0B1D51" />
+
+  <!-- Símbolo RB estilizado em branco -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Haste central -->
+    <path d="M32 10 L32 54" />
+    <!-- Alça esquerda (R invertido) -->
+    <path d="M32 36 C12 38, 10 12, 22 12 C30 12, 32 24, 32 32" />
+    <path d="M27 36 C22 47, 15 53, 10 53" />
+    <!-- Alças direitas (B) -->
+    <path d="M32 32 C32 22, 35 12, 44 12 C55 12, 54 36, 32 36" />
+    <path d="M32 36 C49 36, 51 53, 41 53 C35 53, 33 48, 32 44" />
+  </g>
+</svg>

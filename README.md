@@ -27,6 +27,10 @@ Para trocar os acessos administrativos, execute localmente `node reviews-admin.m
 
 O aluno pode enviar uma foto JPG, PNG ou WebP de até 5 MB e 16 megapixels. O servidor valida e decodifica a imagem com Sharp, remove metadados e converte para WebP de até 800 × 800. A foto fica no banco e só é acessível publicamente quando a avaliação está aprovada. O painel pode visualizar a foto pendente com autenticação. O consentimento inclui a publicação da imagem. Sem foto, o card mostra a inicial do nome.
 
+### Histórico de acessos
+
+O servidor registra somente o instante (`accessed_at`, em milissegundos UTC) de cada GET bem-sucedido de `/` ou `/index.html`. Não guarda IP, agente do navegador, origem, cookies ou identificação do visitante. Atualizações, testes e robôs contam como acessos: não é uma contagem de pessoas únicas. HEAD, arquivos estáticos, formulários e painel não são contabilizados. Os registros ficam no SQLite e aparecem no painel autenticado em “Acessos ao site”, com horário de Brasília, 50 por página. Somente novos acessos são registrados; não há retroatividade. O histórico não é enviado ao GitHub.
+
 O formulário fica em `/avaliar.html`. Ele exige um convite individual, válido por 7 dias, com um único envio. O token é armazenado como hash no banco e fica no fragmento do link. Guarde o link como uma credencial e envie somente ao aluno convidado. Quem tiver o link poderá utilizá-lo.
 
 ```powershell
@@ -58,7 +62,7 @@ Testes: `npm test`. Verificação de sintaxe: `npm run check`.
 
 ### Agendamento por WhatsApp
 
-Os botões “Agendar” do cabeçalho e “Quero começar” da apresentação abrem o mesmo modal. Ele exige nome, WhatsApp brasileiro com DDD e aceite de privacidade; a observação é opcional. A página `privacidade.html` descreve o encaminhamento dos dados. O formulário não envia dados para a API nem grava no SQLite ou no armazenamento do navegador. Fechar o modal limpa os campos. Continuar monta um link `wa.me` e abre o WhatsApp com a mensagem preenchida; o visitante confirma o envio no aplicativo. Como os dados compõem o endereço de destino, eles podem ficar no histórico do navegador e passam ao serviço WhatsApp ao abri-lo.
+Os botões “Agendar” do cabeçalho e “Quero começar” da apresentação abrem o mesmo modal. Ele exige nome, WhatsApp brasileiro com DDD e aceite de privacidade; a observação é opcional. A página `privacidade.html` descreve o encaminhamento dos dados. Ao continuar, o formulário salva a solicitação no SQLite via `/api/appointments` antes de abrir o WhatsApp com a mensagem preenchida. O registro inclui nome, telefone, plano, agenda, adicional, observação e autorização. Não utiliza armazenamento local do navegador. Fechar antes de continuar limpa os campos sem salvar. Uma solicitação salva não confirma envio da mensagem nem reserva de horário. Se o salvamento falhar, o formulário mantém os campos para tentar novamente. Um identificador de solicitação evita duplicar o mesmo envio. Como os dados compõem o endereço de destino, eles podem ficar no histórico do navegador e passam ao serviço WhatsApp ao abri-lo.
 
 Os seis botões “Quero esse plano” também abrem o modal, com resumo do plano, valor mensal e frequência. A mensagem indica interesse e pede confirmação de disponibilidade. Os dados do pacote são lidos do próprio card para acompanhar alterações de conteúdo. No Online, a aula presencial demonstrativa de R$ 200 é uma opção adicional desmarcada por padrão; a mensagem só menciona o adicional se selecionado. Fechar o modal limpa os campos e o plano escolhido. Os botões gerais continuam sem associação a um plano.
 
@@ -82,3 +86,9 @@ A foto indicada foi salva localmente em `assets/rejane.jpg` (640 × 640 pixels).
 ## Antes de publicar
 
 Confirmar serviços, valores, condições, disponibilidade e registro profissional. Os depoimentos ilustrativos foram removidos: apenas relatos aprovados serão exibidos. Não foram inventadas estatísticas de alunos, anos de experiência ou avaliações. As fontes Google Fonts são a única dependência visual externa e têm fontes locais de fallback; podem ser hospedadas localmente.
+
+### Solicitações no painel
+
+O painel privado tem uma seção de solicitações de agendamento com consulta por data, nome, WhatsApp, plano, observações e alternativas de agenda, em páginas de 50 registros. A API exige o mesmo acesso administrativo das avaliações. Os registros e seus dados pessoais ficam no banco excluído do Git, sem associação aos registros de acesso anônimos.
+
+Os dias permitidos são segunda a sexta-feira, e os horários são selecionados em combo de 06:00 a 17:00, de hora em hora. Cada aula dura uma hora, portanto 17:00 é o último início disponível.

@@ -14,6 +14,22 @@
     <div id="invitation-result" hidden><label for="invitation-link">Link individual — válido por 7 dias</label><input id="invitation-link" readonly><button id="copy-invitation" class="button secondary" type="button">Copiar convite</button></div>
     <label for="admin-filter">Mostrar</label><select id="admin-filter"><option value="pending">Pendentes</option><option value="approved">Publicadas</option><option value="rejected">Rejeitadas</option></select>
     <div id="admin-reviews" class="admin-reviews"></div>
+    <section class="admin-appointments" aria-labelledby="appointments-title">
+      <h2 id="appointments-title">Solicitações de agendamento</h2>
+      <p>Registros salvos antes da abertura do WhatsApp. Não confirmam envio da mensagem nem reserva de horários.</p>
+      <button id="refresh-appointments" class="button secondary" type="button">Atualizar solicitações</button>
+      <p id="appointments-status" role="status"></p>
+      <div id="appointments-list" class="admin-reviews"></div>
+      <button id="more-appointments" class="button secondary" type="button" hidden>Mostrar solicitações anteriores</button>
+    </section>
+    <section class="admin-visits" aria-labelledby="visits-title">
+      <h2 id="visits-title">Acessos ao site</h2>
+      <p>Somente data e hora, no fuso de Brasília. Cada abertura ou atualização da página inicial conta como um acesso, inclusive acessos de teste e robôs.</p>
+      <div class="admin-toolbar"><button id="refresh-visits" class="button secondary" type="button">Atualizar acessos</button><span id="visits-total"></span></div>
+      <p id="visits-status" role="status"></p>
+      <ol id="visits-list"></ol>
+      <button id="more-visits" class="button secondary" type="button" hidden>Mostrar acessos anteriores</button>
+    </section>
   </div>
   <a class="review-back" href="/#resultados">Ver avaliações no site</a>
 </main></body></html>

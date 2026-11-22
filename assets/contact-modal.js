@@ -1,4 +1,4 @@
-import {normalizePhone,validPhone,formatPhone,buildContactUrl,formatPlanPrice,planDayCount,WEEK_DAYS,validateSchedules} from './contact-utils.mjs';
+import {normalizePhone,validPhone,formatPhone,buildContactUrl,formatPlanPrice,planDayCount,WEEK_DAYS,validateSchedules,SCHEDULE_MIN_TIME,SCHEDULE_MAX_TIME,SCHEDULE_TIMES} from './contact-utils.mjs';
 const dialog = document.querySelector('#contact-dialog');
 const form = document.querySelector('#contact-form');
 const name = form.elements.contactName;
@@ -21,7 +21,9 @@ function buildScheduleRows(fieldset,count) {
     WEEK_DAYS.forEach((day,number) => select.append(new Option(day,String(number))));
     dayLabel.append(select);
     const timeLabel = document.createElement('label'); timeLabel.textContent = 'Horário';
-    const time = document.createElement('input'); time.type = 'time'; time.required = true; time.step = '60'; time.className = 'schedule-time'; time.setAttribute('aria-label',`Horário do dia ${index+1}, ${fieldset === firstSchedule ? 'primeira' : 'segunda'} opção`);
+    const time = document.createElement('select'); time.required = true; time.className = 'schedule-time'; time.setAttribute('aria-label',`Horário do dia ${index+1}, ${fieldset === firstSchedule ? 'primeira' : 'segunda'} opção`);
+    time.append(new Option('Horário',''));
+    SCHEDULE_TIMES.forEach(value => time.append(new Option(`${Number(value.slice(0,2))}h`,value)));
     timeLabel.append(time); row.append(dayLabel,timeLabel); rows.append(row);
   }
 }
@@ -31,7 +33,7 @@ function resetSchedules() {
   secondSchedule.hidden = true; addAlternative.hidden = false; addAlternative.setAttribute('aria-expanded','false');
 }
 function readSchedule(fieldset) {
-  return [...fieldset.querySelectorAll('.schedule-row')].map(row => ({day:row.querySelector('select').value === '' ? NaN : Number(row.querySelector('select').value),time:row.querySelector('input').value}));
+  return [...fieldset.querySelectorAll('.schedule-row')].map(row => ({day:row.querySelector('.schedule-day').value === '' ? NaN : Number(row.querySelector('.schedule-day').value),time:row.querySelector('.schedule-time').value}));
 }
 function selectedSchedules() {
   return scheduleSection.hidden ? [] : [readSchedule(firstSchedule),...(!secondSchedule.hidden ? [readSchedule(secondSchedule)] : [])];
@@ -40,7 +42,7 @@ scheduleSection.addEventListener('change',event => {
   error.textContent = '';
   const fieldset = event.target.closest('fieldset');
   if (!fieldset) return;
-  const selects = [...fieldset.querySelectorAll('select')];
+  const selects = [...fieldset.querySelectorAll('.schedule-day')];
   for (const select of selects) for (const option of select.options) option.disabled = option.value !== '' && selects.some(other => other !== select && other.value === option.value);
 });
 addAlternative.addEventListener('click',() => {
@@ -55,9 +57,12 @@ document.querySelector('#contact-remove-alternative').addEventListener('click',(
 });
 let selectedPlan = null;
 let opener;
+let pendingAppointment = null;
+let contactSubmitting = false;
 document.querySelectorAll('[data-open-contact]').forEach(button => {
   button.addEventListener('click',() => {
     selectedPlan = null;
+    pendingAppointment = null;
     resetSchedules();
     form.elements.contactDemo.checked = false;
     const card = button.closest('.plan');
@@ -77,7 +82,7 @@ document.querySelectorAll('[data-open-contact]').forEach(button => {
     const days = planDayCount(selectedPlan);
     if (days) {
       scheduleSection.hidden = false; firstSchedule.disabled = false;
-      document.querySelector('#contact-schedule-hint').textContent = `Escolha ${days} ${days === 1 ? 'dia distinto' : 'dias distintos'} e um horário para cada dia, conforme seu plano.`;
+      document.querySelector('#contact-schedule-hint').textContent = `Escolha ${days} ${days === 1 ? 'dia distinto' : 'dias distintos'}, de segunda a sexta, com horários de hora em hora, das ${SCHEDULE_MIN_TIME} às ${SCHEDULE_MAX_TIME}. Cada aula tem duração de 1 hora.`;
       buildScheduleRows(firstSchedule,days);
     }
     opener = button; dialog.showModal(); document.body.classList.add('contact-modal-open');
@@ -92,6 +97,7 @@ dialog.addEventListener('close',() => {
   opener?.focus();
 });
 dialog.addEventListener('click',event => {
+  if (contactSubmitting) return;
   const rect = dialog.getBoundingClientRect();
   if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) dialog.close();
 });
@@ -104,16 +110,31 @@ phone.addEventListener('blur',() => {
   if (validPhone(phone.value)) phone.value = formatPhone(phone.value);
 });
 name.addEventListener('input',() => name.setCustomValidity(''));
-form.addEventListener('submit',event => {
+form.addEventListener('submit',async event => {
   event.preventDefault();
+  if (contactSubmitting) return;
   name.setCustomValidity(name.value.trim().length >= 2 && !/[\u0000-\u001f]/.test(name.value) ? '' : 'Informe seu nome de contato.');
   phone.setCustomValidity(validPhone(phone.value) ? '' : 'Informe um WhatsApp válido com DDD. Exemplo: (61) 99999-9999.');
   if (!form.reportValidity()) return;
   try {
     const schedules = validateSchedules(selectedPlan,selectedSchedules());
-    const url = buildContactUrl({name:name.value,phone:phone.value,observation:observation.value,consent:form.elements.contactConsent.checked,plan:selectedPlan,demoLesson:form.elements.contactDemo.checked,schedules});
-    // Only this user-initiated navigation transmits the data to WhatsApp.
+    const data = {name:name.value,phone:phone.value,observation:observation.value,consent:form.elements.contactConsent.checked,plan:selectedPlan,demoLesson:form.elements.contactDemo.checked,schedules};
+    const url = buildContactUrl(data);
+    const fingerprint = JSON.stringify(data);
+    if (!pendingAppointment || pendingAppointment.fingerprint !== fingerprint) pendingAppointment = {fingerprint,requestId:crypto.randomUUID()};
+    contactSubmitting = true;
+    const button = form.querySelector('[type="submit"]'); button.disabled = true; button.textContent = 'Salvando solicitação…';
+    document.querySelector('#close-contact').disabled = true;
+    const response = await fetch('/api/appointments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,requestId:pendingAppointment.requestId})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Não foi possível salvar sua solicitação. Tente novamente.');
     dialog.close();
     location.assign(url);
-  } catch (exception) { error.textContent = exception.message; error.focus(); }
+  } catch (exception) { error.textContent = exception instanceof TypeError ? 'Não foi possível salvar a solicitação. Confira sua conexão e tente novamente.' : exception.message; error.focus(); }
+  finally {
+    contactSubmitting = false;
+    const button = form.querySelector('[type="submit"]'); button.disabled = false; button.textContent = 'Continuar no WhatsApp';
+    document.querySelector('#close-contact').disabled = false;
+  }
 });
+dialog.addEventListener('cancel',event => { if (contactSubmitting) event.preventDefault(); });

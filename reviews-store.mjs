@@ -20,6 +20,11 @@ export function openReviews(filename = path.join(process.cwd(), 'data', 'reviews
   if (!db.prepare('PRAGMA table_info(reviews)').all().some(column => column.name === 'pinned')) db.exec('ALTER TABLE reviews ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN (0,1))');
   db.exec('CREATE INDEX IF NOT EXISTS reviews_public_order ON reviews(status,pinned DESC,created_at DESC,id DESC)');
   db.exec('CREATE TABLE IF NOT EXISTS admin_access(token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS site_visits(accessed_at INTEGER NOT NULL)');
+  db.exec(`CREATE TABLE IF NOT EXISTS appointments(
+    id INTEGER PRIMARY KEY, request_id TEXT NOT NULL UNIQUE,
+    payload TEXT NOT NULL, created_at INTEGER NOT NULL,
+    consent_version TEXT NOT NULL DEFAULT 'contact-v2');`);
   const hash = token => createHash('sha256').update(token).digest('hex');
   function invitation(token) {
     if (typeof token !== 'string' || !/^[a-f0-9]{64}$/.test(token)) return null;
@@ -28,6 +33,24 @@ export function openReviews(filename = path.join(process.cwd(), 'data', 'reviews
   }
   return {
     close: () => db.close(),
+    recordVisit: () => db.prepare('INSERT INTO site_visits(accessed_at) VALUES(?)').run(Date.now()),
+    saveAppointment(requestId,data) {
+      const payload = JSON.stringify(data);
+      db.prepare('INSERT INTO appointments(request_id,payload,created_at) VALUES(?,?,?) ON CONFLICT(request_id) DO NOTHING').run(requestId,payload,Date.now());
+      const row = db.prepare('SELECT id,payload FROM appointments WHERE request_id=?').get(requestId);
+      if (row.payload !== payload) { const error = new Error('Solicitação já registrada com outros dados. Feche e abra novamente o formulário.'); error.status=409; throw error; }
+      return row.id;
+    },
+    appointments(offset = 0) {
+      if (!Number.isSafeInteger(offset) || offset < 0) { const error = new Error('Página inválida.'); error.status=400; throw error; }
+      const rows = db.prepare('SELECT id,payload,created_at FROM appointments ORDER BY id DESC LIMIT 51 OFFSET ?').all(offset);
+      return {appointments:rows.slice(0,50).map(({payload,...row})=>({...row,...JSON.parse(payload)})),nextOffset:rows.length > 50 ? offset+50 : null};
+    },
+    visits(offset = 0) {
+      if (!Number.isSafeInteger(offset) || offset < 0) { const error = new Error('Página inválida.'); error.status=400; throw error; }
+      const rows = db.prepare('SELECT accessed_at FROM site_visits ORDER BY rowid DESC LIMIT 51 OFFSET ?').all(offset);
+      return {visits:rows.slice(0,50),nextOffset:rows.length > 50 ? offset+50 : null,total:db.prepare('SELECT COUNT(*) AS total FROM site_visits').get().total};
+    },
     createInvitation() {
       const token = randomBytes(32).toString('hex');
       db.prepare('INSERT INTO invitations(token_hash,expires_at) VALUES(?,?)').run(hash(token), Date.now() + 7 * 86400000);

@@ -7,6 +7,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { openReviews } from '../reviews-store.mjs';
 import { normalizeReviewPhoto } from '../review-photo.mjs';
+import { randomUUID } from 'node:crypto';
 
 test('validação de fotos, painel protegido e publicação do retrato', {timeout:25000}, async () => {
   const directory = mkdtempSync(path.join(tmpdir(),'rejane-http-'));
@@ -33,6 +34,29 @@ test('validação de fotos, painel protegido e publicação do retrato', {timeou
     assert.equal((await get('/api/admin/reviews')).status,401);
     assert.equal((await get('/data/reviews.sqlite')).status,404);
     assert.equal((await get('/aprovacoes.html')).status,200);
+    assert.equal((await get('/api/admin/visits')).status,401);
+    assert.equal((await (await get('/api/admin/visits',admin)).json()).total,0);
+    assert.equal((await get('/')).status,200);
+    assert.equal((await get('/index.html')).status,200);
+    await fetch(base+'/',{method:'HEAD'});
+    await get('/assets/style.css');
+    const visits=await (await get('/api/admin/visits',admin)).json();
+    assert.equal(visits.total,2);
+    assert.deepEqual(Object.keys(visits.visits[0]),['accessed_at']);
+    assert.equal(typeof visits.visits[0].accessed_at,'number');
+    assert.equal((await get('/api/admin/visits?offset=invalid',admin)).status,400);
+    assert.equal((await get('/api/admin/appointments')).status,401);
+    const appointment={requestId:randomUUID(),name:'Contato de teste',phone:'61999999999',observation:'Prefiro pela manhã.',consent:true,plan:{name:'Presencial 1x',price:800,online:false},demoLesson:false,schedules:[[{day:0,time:'06:00'}]]};
+    assert.equal((await post('/api/appointments','',{...appointment,consent:false})).status,422);
+    assert.equal((await post('/api/appointments','',{...appointment,schedules:[[{day:0,time:'06:30'}]]})).status,422);
+    assert.equal((await post('/api/appointments','',{...appointment,schedules:[[{day:5,time:'06:00'}]]})).status,422);
+    assert.equal((await post('/api/appointments','',appointment)).status,201);
+    assert.equal((await post('/api/appointments','',appointment)).status,201);
+    assert.equal((await post('/api/appointments','',{...appointment,name:'Outro nome'})).status,409);
+    const appointments=await (await get('/api/admin/appointments',admin)).json();
+    assert.equal(appointments.appointments.length,1);
+    assert.equal(appointments.appointments[0].name,appointment.name);
+    assert.deepEqual(appointments.appointments[0].schedules,appointment.schedules);
     const data={name:'Teste HTTP',rating:4,message:'Relato de teste para verificar o fluxo com fotografia.',consent:true,photo:png.toString('base64')};
     assert.equal((await post('/api/reviews',invite,{...data,photo:'invalid'})).status,422);
     assert.equal((await post('/api/reviews',invite,data)).status,201);

@@ -48,7 +48,7 @@ test('agenda presencial: frequência, dias únicos, horários e alternativa comp
   for(let count=1;count<=5;count++) {
     const plan={name:`Presencial ${count}x`,price:800*count,frequency:`${count} dias por semana`,online:false};
     const first=Array.from({length:count},(_,day)=>({day,time:'07:00'}));
-    const second=first.map(item=>({...item,time:'18:30'}));
+    const second=first.map(item=>({...item,time:'17:00'}));
     assert.equal(planDayCount(plan),count);
     assert.deepEqual(validateSchedules(plan,[first]),[first]);
     assert.deepEqual(validateSchedules(plan,[first,second]),[first,second]);
@@ -64,11 +64,24 @@ test('agenda presencial: frequência, dias únicos, horários e alternativa comp
     assert.ok(text.includes('1ª opção de agenda:'));
     assert.ok(text.includes('2ª opção de agenda:'));
     assert.ok(text.includes('Segunda-feira: 07:00'));
-    assert.ok(text.includes('Segunda-feira: 18:30'));
+    assert.ok(text.includes('Segunda-feira: 17:00'));
     assert.ok(text.includes('não reservam horários'));
     const withoutAlternative=new URL(buildContactUrl({name:'Maria',phone:'61999999999',consent:true,plan,schedules:[first]})).searchParams.get('text');
     assert.ok(!withoutAlternative.includes('2ª opção'));
   }
   assert.deepEqual(validateSchedules(null,[]),[]);
   assert.deepEqual(validateSchedules({online:true},[]),[]);
+});
+
+test('agenda permite apenas dias úteis entre 06:00 e 17:00 nas duas opções',() => {
+  const plan={name:'Presencial 1x',price:800,frequency:'1 dia por semana',online:false};
+  for(const day of [0,1,2,3,4]) for(const time of ['06:00','12:00','17:00']) {
+    assert.doesNotThrow(()=>validateSchedules(plan,[[{day,time}]]));
+  }
+  for(const day of [5,6,-1]) assert.throws(()=>validateSchedules(plan,[[{day,time:'10:00'}]]));
+  for(const time of ['02:08','05:59','06:01','12:30','17:01','18:00','18:30','23:59']) {
+    assert.throws(()=>validateSchedules(plan,[[{day:0,time}]]));
+    assert.throws(()=>validateSchedules(plan,[[{day:0,time:'06:00'}],[{day:1,time}]]));
+  }
+  assert.throws(()=>validateSchedules(plan,[[{day:0,time:'06:00'}],[{day:5,time:'12:00'}]]));
 });

@@ -17,7 +17,10 @@ export function formatPhone(value) {
 export function formatPlanPrice(price) {
   return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(price);
 }
-export const WEEK_DAYS = ['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado','Domingo'];
+export const WEEK_DAYS = ['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira'];
+export const SCHEDULE_MIN_TIME = '06:00';
+export const SCHEDULE_MAX_TIME = '17:00';
+export const SCHEDULE_TIMES = Array.from({length:12},(_,index) => `${String(index+6).padStart(2,'0')}:00`);
 export function planDayCount(plan) {
   return plan && !plan.online ? Number(/^Presencial ([1-5])x$/.exec(plan.name)?.[1] || 0) : 0;
 }
@@ -28,7 +31,7 @@ export function validateSchedules(plan,schedules) {
   if (!Array.isArray(schedules) || schedules.length < 1 || schedules.length > 2) throw new Error('Preencha a 1ª opção de agenda.');
   for (const [index,days] of schedules.entries()) {
     if (!Array.isArray(days) || days.length !== count) throw new Error(`A ${index+1}ª opção deve conter exatamente ${count} ${count === 1 ? 'dia' : 'dias'}.`);
-    if (days.some(item => !item || !Number.isInteger(item.day) || item.day < 0 || item.day > 6 || typeof item.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time))) throw new Error(`Preencha os dias e horários da ${index+1}ª opção de agenda.`);
+    if (days.some(item => !item || !Number.isInteger(item.day) || item.day < 0 || item.day >= WEEK_DAYS.length || !SCHEDULE_TIMES.includes(item.time))) throw new Error(`Na ${index+1}ª opção, escolha dias de segunda a sexta e horários inteiros entre 06:00 e 17:00.`);
     if (new Set(days.map(item => item.day)).size !== count) throw new Error(`Não repita dias dentro da ${index+1}ª opção.`);
   }
   const signature = days => days.map(item => `${item.day}:${item.time}`).sort().join('|');
